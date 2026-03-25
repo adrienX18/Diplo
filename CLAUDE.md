@@ -65,7 +65,7 @@ The AI learns from Adrien's feedback over time (e.g., "this wasn't urgent" or "y
 ### Possible future extensions (not planned)
 
 - **Notion** — look up contacts, projects, and notes for richer understanding of who someone is
-- **Email reply on behalf** — wire `EmailProvider.send_reply()` to the assistant's reply flow with confirmation
+- **Email reply by address** — currently email replies require the sender to be in the contact registry (they must have emailed Adrien). Supporting direct email address input ("email john@example.com saying...") would remove this limitation
 - **Outlook / CalDAV** — additional calendar/email providers (architecture already supports them via abstract base classes)
 
 ## Milestones
@@ -386,19 +386,16 @@ Adding a new Gmail mailbox requires running `python3 -m src.email.setup --name "
 
 ### Known issues (accepted)
 
-**1. Email reply sending is wired but not exposed**
-`EmailProvider.send_reply()` and `EmailManager.send_reply()` are implemented in the Gmail provider, but the assistant doesn't use them yet. Adrien can't say "reply to that email saying X" — the reply intent routing only handles Beeper messages. Wiring email replies would require adding an `email_reply` intent type, recipient resolution via email address (not contact registry), and a confirmation flow similar to M4.
-
-**2. Email `last_seen_at` is independent from message `last_seen_at`**
+**1. Email `last_seen_at` is independent from message `last_seen_at`**
 The email cache has its own `email_last_seen_at` in its `state` table, separate from the message cache's `last_seen_at`. This means "what's new?" advances the message watermark but not the email one (since emails are opt-in). This is intentional but could confuse Adrien if he expects email state to track with message state.
 
-**3. No email unread/read tracking beyond initial state**
+**2. No email unread/read tracking beyond initial state**
 The `is_read` field is set from Gmail's UNREAD label at fetch time, but never updated afterward. If Adrien reads an email in Gmail, the cache still shows the stale state. This doesn't affect functionality (the cache is for search/context, not inbox management), but could lead to misleading "unread" counts if displayed.
 
-**4. Calendar OAuth consent flow blocks startup**
+**3. Calendar OAuth consent flow blocks startup**
 If the calendar credentials exist but no token has been saved yet, `GoogleCalendarProvider._get_service()` triggers the OAuth browser flow. Since this happens lazily (on first calendar query), it blocks the assistant until Adrien completes the consent flow in the browser. The first calendar query will time out from Adrien's perspective. After that, the token is saved and subsequent queries are fast.
 
-**5. HTML email body conversion is best-effort**
+**4. HTML email body conversion is best-effort**
 `_strip_html()` uses `html2text` if installed, otherwise falls back to regex tag stripping. The regex fallback loses formatting, links, and may mangle complex HTML layouts. For most emails this is fine, but heavily styled marketing emails may produce garbled text.
 
 ### Dependencies
@@ -580,7 +577,7 @@ claude mcp add --transport stdio beeper_desktop_api_api \
 
 ### Channel separation (Telegram vs Beeper)
 - **Diplo talks TO Adrien via Telegram only.** All responses, notifications, summaries, and automation results go through the Telegram control channel. Diplo must NEVER message Adrien via Beeper (WhatsApp, iMessage, etc.).
-- **Diplo talks AS Adrien to other people via Beeper only.** When sending messages on Adrien's behalf, the recipient should believe Adrien wrote it — Diplo impersonates, never reveals it's an AI.
+- **Diplo talks AS Adrien to other people via Beeper or Gmail.** When sending messages on Adrien's behalf (Beeper) or replying to emails (Gmail), the recipient should believe Adrien wrote it — Diplo impersonates, never reveals it's an AI.
 - **Automation actions can trigger accidental Beeper sends to Adrien.** If a scheduled automation's action text says "notify me" or "tell me about...", Sonnet can misinterpret it as a reply intent with recipient "me", resolve Adrien in the contact registry, and send via Beeper to Adrien's WhatsApp. **Fix (prompt):** the search plan extraction prompt now explicitly states that "tell me", "notify me", "send me a summary" are NOT reply intents. **Fix (code):** `_is_adrien_recipient()` in `assistant.py` catches self-references ("me", "myself", "Adrien", "moi", and `USER_SENDER_IDS` matches) and blocks the Beeper send, returning the intent text as a normal response instead.
 
 ### Lookback search (insistence handling)

@@ -1141,7 +1141,7 @@ async def _route_intent(user_text: str, convo_context: str = "") -> str:
 Return ONE word — the intent type:
 
 - query — wants info about messages, emails, calendar, or schedule (summaries, searches, "what's new?", "what did Sophie say?", "check again", "what's on my calendar?", "when am I free?", "any emails?", time-range searches, etc.)
-- reply — wants to send a message to ANOTHER PERSON via Beeper ("tell Sophie I'll be late", "reply to Marc saying...")
+- reply — wants to send a message to ANOTHER PERSON via Beeper OR reply to an email ("tell Sophie I'll be late", "reply to Marc saying...", "reply to that email saying thanks", "email Sophie about the contract")
 - automation — wants to create, list, modify, or delete an automation ("every morning at 9am...", "show my automations", "stop the morning summary", "whenever Sophie messages...")
 - feedback — giving behavioral feedback or preference changes ("that wasn't urgent", "your summaries are too long", "always prioritize Sophie")
 - casual — greetings, thanks, jokes, chitchat, questions about Diplo itself ("hey!", "thanks", "how are you?")
@@ -1256,12 +1256,14 @@ async def _extract_reply_plan(user_text: str, convo_context: str = "") -> dict:
     if convo_context:
         convo_section = f"\n{convo_context}\n\nUse the conversation history to resolve references like \"him\", \"her\", \"that person\".\n"
 
-    system_prompt = f"""Extract the reply intent from {USER_NAME}'s message. He wants to send a message to someone via Beeper.
+    system_prompt = f"""Extract the reply intent from {USER_NAME}'s message. He wants to send a message to someone — either via Beeper (messaging platforms) or as an email reply.
 {convo_section}
 Return a JSON object with:
 - "recipient": "person's name"
 - "message": "what {USER_NAME} wants to say (capture his intent, not necessarily his exact words)"
-- "network": "optional platform if specified (e.g. whatsapp, telegram)"
+- "network": "optional platform if specified (e.g. whatsapp, telegram, email)"
+
+When {USER_NAME} explicitly mentions email ("reply to that email", "email Sophie", "respond to her email"), set "network": "email". Otherwise, omit it and the system will resolve the best channel from the contact registry.
 
 IMPORTANT: If the text says "tell me", "notify me", "send me", "let me know" — the recipient is {USER_NAME} himself. Return {{"recipient": "me", "message": "..."}} and the system will handle it.
 
@@ -1269,7 +1271,9 @@ Return ONLY the JSON object. Examples:
 "tell Sophie I'll be late" → {{"recipient": "Sophie", "message": "I'll be late"}}
 "reply to PLB saying thanks for the deck" → {{"recipient": "PLB", "message": "thanks for the deck"}}
 "send a message to Marc on whatsapp saying let's meet tomorrow" → {{"recipient": "Marc", "message": "let's meet tomorrow", "network": "whatsapp"}}
-"tell the team chat I won't make standup" → {{"recipient": "team", "message": "I won't make standup"}}"""
+"tell the team chat I won't make standup" → {{"recipient": "team", "message": "I won't make standup"}}
+"reply to Sophie's email saying sounds good" → {{"recipient": "Sophie", "message": "sounds good", "network": "email"}}
+"email Marc about the meeting" → {{"recipient": "Marc", "message": "about the meeting", "network": "email"}}"""
 
     raw = await complete(
         model=SEARCH_PLAN_MODEL,
