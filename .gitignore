@@ -1,0 +1,21 @@
+# Secrets & credentials
+.env
+email_client_secret.json
+google_calendar_credentials.json
+google_calendar_token.json
+
+# Runtime data (SQLite databases, OAuth tokens)
+data/
+
+# Learned rules & feedback (personal, generated at runtime)
+prompts/feedback.md
+prompts/learned_rules.md
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Tools & IDE
+.pytest_cache/
+.DS_Store
